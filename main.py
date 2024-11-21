@@ -21,7 +21,7 @@ parser.add_argument('--tau', type=float, default=0.005, metavar='G',
                     help='target smoothing coefficient(τ) (default: 0.005)')
 parser.add_argument('--lr', type=float, default=0.0003, metavar='G',
                     help='learning rate (default: 0.0003)')
-parser.add_argument('--alpha', type=float, default=0.2, metavar='G',
+parser.add_argument('--alpha', type=float, default=0.05, metavar='G',
                     help='Temperature parameter α determines the relative importance of the entropy\
                             term against the reward (default: 0.2)')
 parser.add_argument('--automatic_entropy_tuning', type=bool, default=False, metavar='G',
@@ -48,8 +48,8 @@ args = parser.parse_args()
 
 # Environment
 # env = NormalizedActions(gym.make(args.env_name))
-env = gym.make(args.env_name)
-env.seed(args.seed)
+env = gym.make("MountainCarContinuous-v0")
+# env.seed(args.seed)
 env.action_space.seed(args.seed)
 
 torch.manual_seed(args.seed)
@@ -73,9 +73,9 @@ for i_episode in itertools.count(1):
     episode_reward = 0
     episode_steps = 0
     done = False
-    state = env.reset()
-
-    while not done:
+    state, _ = env.reset()
+    truncated = False
+    while not (done or truncated):
         if args.start_steps > total_numsteps:
             action = env.action_space.sample()  # Sample random action
         else:
@@ -94,14 +94,14 @@ for i_episode in itertools.count(1):
                 writer.add_scalar('entropy_temprature/alpha', alpha, updates)
                 updates += 1
 
-        next_state, reward, done, _ = env.step(action) # Step
+        next_state, reward, done, truncated, _ = env.step(action) # Step
         episode_steps += 1
         total_numsteps += 1
         episode_reward += reward
 
         # Ignore the "done" signal if it comes from hitting the time horizon.
         # (https://github.com/openai/spinningup/blob/master/spinup/algos/sac/sac.py)
-        mask = 1 if episode_steps == env._max_episode_steps else float(not done)
+        mask = 1 if episode_steps == env._max_episode_steps else float(not (done or truncated))
 
         memory.push(state, action, reward, next_state, mask) # Append transition to memory
 
@@ -117,13 +117,14 @@ for i_episode in itertools.count(1):
         avg_reward = 0.
         episodes = 10
         for _  in range(episodes):
-            state = env.reset()
+            state, _ = env.reset()
             episode_reward = 0
             done = False
-            while not done:
+            truncated = False
+            while not (done or truncated):
                 action = agent.select_action(state, evaluate=True)
 
-                next_state, reward, done, _ = env.step(action)
+                next_state, reward, done,truncated, _ = env.step(action)
                 episode_reward += reward
 
 
